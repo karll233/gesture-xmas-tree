@@ -24,6 +24,21 @@
       max-width:min(420px, calc(100vw - 32px));
       pointer-events:auto;
     }
+    #btnHudToggle{
+      display:none;
+      align-self:flex-start;
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.35);
+      color:var(--white);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.2px;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+    }
+    #hud.collapsed .panel{display:none}
     .panel{
       backdrop-filter: blur(10px);
       background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
@@ -123,6 +138,11 @@
         max-height: 42vh;
         overflow:auto;
       }
+      #btnHudToggle{display:inline-flex}
+      #hud.collapsed{
+        max-height:none;
+        overflow:visible;
+      }
       #hud .panel{padding:10px 10px}
       #hud .row{gap:8px}
       #hud .tag{font-size:11px; padding:4px 8px}
@@ -152,6 +172,7 @@
   <div id="app"></div>
 
   <div id="hud">
+    <button id="btnHudToggle" class="btn secondary">收起面板</button>
     <div class="panel">
       <div class="row" style="justify-content:space-between;">
         <div class="row">
@@ -217,6 +238,8 @@ const $ = (sel)=>document.querySelector(sel);
 const dbg = $("#dbg");
 const stateText = $("#stateText");
 const photoCount = $("#photoCount");
+const hud = $("#hud");
+const btnHudToggle = $("#btnHudToggle");
 
 const videoEl = $("#video");
 const camWrap = $("#camWrap");
@@ -234,6 +257,15 @@ const INPUT_FLIP_X = !MP_SELFIE_MODE;
 const INPUT_FLIP_Y = false;
 const mapX = (x)=> INPUT_FLIP_X ? (1 - x) : x;
 const mapY = (y)=> INPUT_FLIP_Y ? (1 - y) : y;
+
+let hudCollapsed = false;
+function setHudCollapsed(next){
+  hudCollapsed = next;
+  hud.classList.toggle("collapsed", hudCollapsed);
+  if(btnHudToggle){
+    btnHudToggle.textContent = hudCollapsed ? "展开面板" : "收起面板";
+  }
+}
 
 /* ---------------- Scene ---------------- */
 const app = $("#app");
@@ -1143,6 +1175,10 @@ function updatePinchIndicator(){
 /* ---------------- UI ---------------- */
 btnHelp.addEventListener("click", ()=>{
   hint.style.display = (hint.style.display === "none") ? "block" : "none";
+});
+
+btnHudToggle?.addEventListener("click", ()=>{
+  setHudCollapsed(!hudCollapsed);
 });
 
 btnReset.addEventListener("click", ()=>{
