@@ -115,6 +115,22 @@
       background: rgba(184,31,45,.18);
     }
     @media (max-width:640px){
+      #hud{
+        left:10px;
+        right:10px;
+        top:10px;
+        max-width: calc(100vw - 20px);
+        max-height: 42vh;
+        overflow:auto;
+      }
+      #hud .panel{padding:10px 10px}
+      #hud .row{gap:8px}
+      #hud .tag{font-size:11px; padding:4px 8px}
+      #hud .btn, #hud label.file{padding:8px 10px; border-radius:10px; font-size:12px}
+      #hud .small{display:none}
+      .debug-panel{display:none}
+      #hint{left:10px; right:10px; top:auto; bottom:10px}
+      #hint .panel{max-height:45vh; overflow:auto}
       #camWrap{width:min(180px, 46vw)}
       .kv{grid-template-columns: 92px 1fr;}
     }
@@ -162,7 +178,7 @@
       </div>
     </div>
 
-    <div class="panel"><div id="dbg">loading…</div></div>
+    <div class="panel debug-panel"><div id="dbg">loading…</div></div>
   </div>
 
   <div id="hint" style="display:none;">
@@ -212,6 +228,12 @@ const uploader = $("#uploader");
 const pinchIndicator = $("#pinchIndicator");
 
 let cameraOn = true;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const MP_SELFIE_MODE = isMobile;
+const INPUT_FLIP_X = !MP_SELFIE_MODE;
+const INPUT_FLIP_Y = false;
+const mapX = (x)=> INPUT_FLIP_X ? (1 - x) : x;
+const mapY = (y)=> INPUT_FLIP_Y ? (1 - y) : y;
 
 /* ---------------- Scene ---------------- */
 const app = $("#app");
@@ -409,6 +431,56 @@ const ndc = new THREE.Vector2();
 const photoItems = [];
 let focusedPhoto = null;
 
+function svgToDataUri(svg){
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+function buildDefaultPhotoSvgs(){
+  const card = (title, subtitle, bg1, bg2, accent1, accent2)=>`
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${bg1}"/>
+      <stop offset="100%" stop-color="${bg2}"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <rect x="36" y="36" width="440" height="440" rx="22" ry="22" fill="none" stroke="${accent1}" stroke-width="14"/>
+  <text x="50%" y="46%" text-anchor="middle" font-family="Georgia, serif" font-size="54" fill="${accent1}" font-weight="700">${title}</text>
+  <text x="50%" y="60%" text-anchor="middle" font-family="Georgia, serif" font-size="62" fill="${accent2}" font-weight="800">${subtitle}</text>
+  <circle cx="110" cy="140" r="6" fill="rgba(255,255,255,0.7)"/>
+  <circle cx="190" cy="120" r="4" fill="rgba(255,255,255,0.55)"/>
+  <circle cx="380" cy="150" r="5" fill="rgba(255,255,255,0.6)"/>
+  <circle cx="330" cy="240" r="6" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="150" cy="320" r="5" fill="rgba(255,255,255,0.55)"/>
+  <circle cx="360" cy="360" r="4" fill="rgba(255,255,255,0.6)"/>
+</svg>`;
+  return [
+    svgToDataUri(card("MERRY", "XMAS", "#0b1a12", "#1b3a2a", "#d8b15a", "#b81f2d")),
+    svgToDataUri(card("HAPPY", "HOLIDAY", "#0c1b13", "#1f3c2e", "#d8b15a", "#f5f2e9")),
+    svgToDataUri(card("WINTER", "NIGHT", "#071017", "#102a2b", "#7fffd4", "#d8b15a")),
+    svgToDataUri(card("SILENT", "SNOW", "#0a0e12", "#1b2930", "#f5f2e9", "#b81f2d")),
+    svgToDataUri(card("FESTIVE", "LIGHTS", "#0b160f", "#193320", "#d8b15a", "#7fffd4")),
+    svgToDataUri(card("COZY", "EVE", "#0c1312", "#22362e", "#b81f2d", "#d8b15a")),
+  ];
+}
+const DEFAULT_PHOTO_URLS = [
+  "photos/1.jpeg",
+  "photos/2.jpeg",
+  "photos/3.jpeg",
+  "photos/4.jpeg",
+  "photos/5.jpeg",
+  "photos/6.jpeg",
+  "photos/7.jpeg",
+  "photos/8.jpeg",
+  "photos/9.jpeg",
+  "photos/10.jpeg",
+  "photos/11.jpeg",
+  "photos/12.jpeg",
+  "photos/13.jpeg",
+  "photos/14.jpeg"
+];
+const DEFAULT_PHOTO_COUNT = 14;
+
 function createPhotoMesh(tex){
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy?.() || 4;
@@ -436,6 +508,30 @@ function createPhotoMesh(tex){
   frame.position.z = -0.006;
   m.add(frame);
   return m;
+}
+
+function addDefaultPhotos(){
+  if(!DEFAULT_PHOTO_URLS.length){
+    addPlaceholderPhotos(DEFAULT_PHOTO_COUNT);
+    return;
+  }
+  photoCount.textContent = "加载中…";
+  const loader = new THREE.TextureLoader();
+  const urls = [];
+  while(urls.length < DEFAULT_PHOTO_COUNT){
+    urls.push(DEFAULT_PHOTO_URLS[urls.length % DEFAULT_PHOTO_URLS.length]);
+  }
+  const promises = urls.map((url)=>new Promise((resolve, reject)=>{
+    loader.load(url, resolve, undefined, reject);
+  }));
+  Promise.all(promises).then((textures)=>{
+    textures.forEach(addOnePhoto);
+    photoCount.textContent = String(photoItems.length);
+  }).catch((err)=>{
+    console.error(err);
+    addPlaceholderPhotos(DEFAULT_PHOTO_COUNT);
+    photoCount.textContent = String(photoItems.length);
+  });
 }
 
 function addPlaceholderPhotos(n=10){
@@ -509,7 +605,7 @@ function addPhotosFromFiles(files){
 }
 
 /* initial */
-addPlaceholderPhotos(12);
+addDefaultPhotos();
 
 /* ---------------- State ---------------- */
 const STATES = { COMPACT:"compact", SCATTER:"scatter", FOCUS:"focus" };
@@ -792,11 +888,11 @@ function analyzeHand(lm){
   const pinchIndex = clamp01(1 - pinchNormIndex*0.75);
   const pinch = clamp01(Math.max(pinchPalm, pinchIndex));
 
-  const hx = lm[0].x;
-  const hy = lm[0].y;
+  const hx = mapX(lm[0].x);
+  const hy = mapY(lm[0].y);
 
   // roll: use vector (index mcp->tip) as proxy
-  const v = { x: lm[8].x - lm[5].x, y: lm[8].y - lm[5].y };
+  const v = { x: mapX(lm[8].x) - mapX(lm[5].x), y: mapY(lm[8].y) - mapY(lm[5].y) };
   const roll = Math.atan2(v.y, v.x);
 
   return { openness, fist, pinch, hx, hy, roll };
@@ -813,11 +909,15 @@ function chooseGesture(m){
 
 async function initMediaPipe(){
   hands = new Hands({ locateFile: (file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+  const mpModelComplexity = isMobile ? 0 : 1;
+  const mpMinDetect = isMobile ? 0.5 : 0.65;
+  const mpMinTrack = isMobile ? 0.5 : 0.6;
   hands.setOptions({
+    selfieMode: MP_SELFIE_MODE,
     maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.65,
-    minTrackingConfidence: 0.6
+    modelComplexity: mpModelComplexity,
+    minDetectionConfidence: mpMinDetect,
+    minTrackingConfidence: mpMinTrack
   });
 
   hands.onResults((results)=>{
@@ -847,7 +947,7 @@ async function initMediaPipe(){
     // camera control mapping (scatter/focus)
     const y = anim.handY;
     if(state !== STATES.FOCUS){
-      const x = 1 - anim.handX;
+    const x = anim.handX;
       const pinchBrake = anim.pinchActive ? 0.65 : 1.0;
       const maxYaw = 1.15;
       const maxPitch = 0.7;
@@ -862,10 +962,10 @@ async function initMediaPipe(){
     }
 
     // pointer: blend index tip and pinch center
-    const ix = 1 - lm[8].x;
-    const iy = lm[8].y;
-    const pinchX = 1 - (lm[4].x + lm[8].x) * 0.5;
-    const pinchY = (lm[4].y + lm[8].y) * 0.5;
+    const ix = mapX(lm[8].x);
+    const iy = mapY(lm[8].y);
+    const pinchX = mapX((lm[4].x + lm[8].x) * 0.5);
+    const pinchY = mapY((lm[4].y + lm[8].y) * 0.5);
     const pinchBlend = clamp01((anim.pinch - 0.35) / 0.5);
     const px = THREE.MathUtils.lerp(ix, pinchX, pinchBlend);
     const py = THREE.MathUtils.lerp(iy, pinchY, pinchBlend);
@@ -898,13 +998,16 @@ async function initMediaPipe(){
     }
   });
 
+  const camWidth = isMobile ? 480 : 640;
+  const camHeight = isMobile ? 360 : 480;
   mpCamera = new Camera(videoEl, {
     onFrame: async ()=>{
       if(!cameraOn) return;
       await hands.send({image: videoEl});
     },
-    width: 640,
-    height: 480
+    width: camWidth,
+    height: camHeight,
+    facingMode: "user"
   });
   await mpCamera.start();
 }
@@ -1055,7 +1158,7 @@ btnReset.addEventListener("click", ()=>{
   anim.dragging=false;
   anim.focusScale=1.0;
   anim.focusRotZ=0;
-  addPlaceholderPhotos(12);
+  addDefaultPhotos();
   setState(STATES.COMPACT);
 });
 
